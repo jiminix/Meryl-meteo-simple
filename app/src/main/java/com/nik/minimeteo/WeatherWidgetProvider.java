@@ -14,6 +14,8 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -33,6 +35,7 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
         for (int id : appWidgetIds) {
             e.remove("lat_" + id);
             e.remove("lon_" + id);
+            e.remove("locality_" + id);
         }
         e.apply();
     }
@@ -62,7 +65,7 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                 HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
                 c.setConnectTimeout(8000);
                 c.setReadTimeout(8000);
-                c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.0");
+                c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.1");
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
                     StringBuilder sb = new StringBuilder();
                     String line;
@@ -88,6 +91,16 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
 
     private static RemoteViews baseViews(Context context, int appWidgetId) {
         RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.widget_weather);
+
+        SharedPreferences p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String locality = p.getString("locality_" + appWidgetId, "");
+        String date = new SimpleDateFormat("EEE d MMM", Locale.FRENCH)
+            .format(new Date())
+            .toUpperCase(Locale.FRENCH);
+
+        rv.setTextViewText(R.id.weather_date, date);
+        rv.setTextViewText(R.id.weather_locality, locality == null ? "" : locality.toUpperCase(Locale.FRENCH));
+
         Intent click = new Intent(context, WeatherProxyActivity.class);
         click.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);
         PendingIntent pi = PendingIntent.getActivity(
