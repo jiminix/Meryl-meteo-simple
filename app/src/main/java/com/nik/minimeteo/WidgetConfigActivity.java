@@ -7,7 +7,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.location.Location;
+import android.location.Address;
+import android.location.Geocoder;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.os.CancellationSignal;
@@ -28,6 +29,8 @@ import java.net.HttpURLConnection;
 import java.net.URLEncoder;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -74,7 +77,7 @@ public class WidgetConfigActivity extends Activity {
         root.addView(title, new LinearLayout.LayoutParams(-1, -2));
 
         TextView sub = new TextView(this);
-        sub.setText("Choisis la météo à afficher. Le widget ne montrera ensuite que l’icône et la température.");
+        sub.setText("Choisis la météo à afficher. Le widget montrera la date, la météo et la localité.");
         sub.setTextSize(16);
         sub.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams subLp = new LinearLayout.LayoutParams(-1, -2);
@@ -133,7 +136,8 @@ public class WidgetConfigActivity extends Activity {
                 JSONObject r = results.getJSONObject(0);
                 double lat = r.getDouble("latitude");
                 double lon = r.getDouble("longitude");
-                runOnUiThread(() -> saveAndFinish(lat, lon));
+                String locality = r.optString("name", city);
+                runOnUiThread(() -> saveAndFinish(lat, lon, locality));
             } catch (Exception e) {
                 runOnUiThread(() -> setBusy(false, "Ville introuvable. Essaie avec une autre écriture."));
             }
@@ -166,7 +170,12 @@ public class WidgetConfigActivity extends Activity {
                 ? LocationManager.NETWORK_PROVIDER : LocationManager.GPS_PROVIDER;
             lm.getCurrentLocation(provider, new CancellationSignal(), getMainExecutor(), location -> {
                 if (location != null) {
-                    saveAndFinish(location.getLatitude(), location.getLongitude());
+                    double lat = location.getLatitude();
+                    double lon = location.getLongitude();
+                    executor.execute(() -> {
+                        String locality = resolveLocality(lat, lon);
+                        runOnUiThread(() -> saveAndFinish(lat, lon, locality));
+                    });
                 } else {
                     setBusy(false, "Position indisponible. Saisis une ville.");
                 }
@@ -178,11 +187,25 @@ public class WidgetConfigActivity extends Activity {
         }
     }
 
-    private void saveAndFinish(double lat, double lon) {
+    private String resolveLocality(double lat, double lon) {
+        try {
+            Geocoder geocoder = new Geocoder(this, Locale.FRENCH);
+            List<Address> addresses = geocoder.getFromLocation(lat, lon, 1);
+            if (addresses != null && !addresses.isEmpty()) {
+                Address a = addresses.get(0);
+                if (a.getLocality() != null && !a.getLocality().isEmpty()) return a.getLocality();
+                if (a.getSubAdminArea() != null && !a.getSubAdminArea().isEmpty()) return a.getSubAdminArea();
+            }
+        } catch (Exception ignored) { }
+        return "Ma position";
+    }
+
+    private void saveAndFinish(double lat, double lon, String locality) {
         SharedPreferences p = getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         p.edit()
             .putLong("lat_" + appWidgetId, Double.doubleToRawLongBits(lat))
             .putLong("lon_" + appWidgetId, Double.doubleToRawLongBits(lon))
+            .putString("locality_" + appWidgetId, locality)
             .apply();
 
         AppWidgetManager manager = AppWidgetManager.getInstance(this);
@@ -203,7 +226,7 @@ public class WidgetConfigActivity extends Activity {
         HttpURLConnection c = (HttpURLConnection) new URL(address).openConnection();
         c.setConnectTimeout(8000);
         c.setReadTimeout(8000);
-        c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.0");
+        c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.1");
         try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
             StringBuilder sb = new StringBuilder();
             String line;
