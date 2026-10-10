@@ -3,7 +3,7 @@
     android:configure="com.nik.minimeteo.WidgetConfigActivity"
     android:description="@string/widget_description"
     android:initialLayout="@layout/widget_weather"
-    android:minWidth="72dp"
+    android:minWidth="76dp"
     android:minHeight="44dp"
     android:previewLayout="@layout/widget_weather"
     android:resizeMode="none"
