@@ -36,19 +36,21 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
             e.remove("lat_" + id);
             e.remove("lon_" + id);
             e.remove("locality_" + id);
+            e.remove("last_temp_" + id);
+            e.remove("last_code_" + id);
         }
         e.apply();
     }
 
     public static void updateWidget(Context context, AppWidgetManager manager, int appWidgetId) {
         RemoteViews loading = baseViews(context, appWidgetId);
-        loading.setTextViewText(R.id.weather_temp, "…");
+        loading.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
         manager.updateAppWidget(appWidgetId, loading);
 
         SharedPreferences p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
         if (!p.contains("lat_" + appWidgetId) || !p.contains("lon_" + appWidgetId)) {
             RemoteViews rv = baseViews(context, appWidgetId);
-            rv.setTextViewText(R.id.weather_temp, "--°");
+            rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
             rv.setImageViewResource(R.id.weather_icon, R.drawable.ic_partly_cloudy);
             manager.updateAppWidget(appWidgetId, rv);
             return;
@@ -64,7 +66,8 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     lat, lon);
                 HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
                 c.setConnectTimeout(8000);
-                c.setReadTimeout(8000);
+                c.setReadTimeout(12000);
+                c.setRequestProperty("Accept", "application/json");
                 c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.1");
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
                     StringBuilder sb = new StringBuilder();
@@ -73,6 +76,7 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     JSONObject current = new JSONObject(sb.toString()).getJSONObject("current");
                     int temp = (int) Math.round(current.getDouble("temperature_2m"));
                     int code = current.getInt("weather_code");
+                    p.edit().putInt("last_temp_" + appWidgetId, temp).putInt("last_code_" + appWidgetId, code).apply();
 
                     RemoteViews rv = baseViews(context, appWidgetId);
                     rv.setTextViewText(R.id.weather_temp, temp + "°");
@@ -87,6 +91,11 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                 manager.updateAppWidget(appWidgetId, rv);
             }
         });
+    }
+
+    private static String cachedTemperature(Context context, int widgetId) {
+        SharedPreferences p = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        return p.contains("last_temp_" + widgetId) ? p.getInt("last_temp_" + widgetId, 0) + "°" : "--°";
     }
 
     private static RemoteViews baseViews(Context context, int appWidgetId) {
