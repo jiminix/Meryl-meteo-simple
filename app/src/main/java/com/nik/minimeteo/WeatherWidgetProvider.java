@@ -1,6 +1,7 @@
 package com.nik.minimeteo;
 
 import android.app.PendingIntent;
+import android.util.Log;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
@@ -85,9 +86,11 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                 } finally {
                     c.disconnect();
                 }
-            } catch (Exception ignored) {
+            } catch (Exception error) {
+                Log.w("MerylMeteo", "Weather fetch failed: " + appWidgetId, error);
                 RemoteViews rv = baseViews(context, appWidgetId);
-                rv.setTextViewText(R.id.weather_temp, "--°");
+                rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
+                rv.setImageViewResource(R.id.weather_icon, drawableForCode(p.getInt("last_code_" + appWidgetId, 2)));
                 manager.updateAppWidget(appWidgetId, rv);
             }
         });
