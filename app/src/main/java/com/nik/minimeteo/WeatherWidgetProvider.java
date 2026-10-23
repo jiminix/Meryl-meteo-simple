@@ -53,6 +53,7 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
             RemoteViews rv = baseViews(context, appWidgetId);
             rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
             rv.setImageViewResource(R.id.weather_icon, R.drawable.ic_partly_cloudy);
+            rv.setTextViewText(R.id.weather_locality, "VILLE À CONFIGURER");
             manager.updateAppWidget(appWidgetId, rv);
             return;
         }
@@ -69,6 +70,8 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                 c.setConnectTimeout(8000);
                 c.setReadTimeout(12000);
                 c.setRequestProperty("Accept", "application/json");
+                int httpStatus = c.getResponseCode();
+                if (httpStatus != 200) throw new java.io.IOException("HTTP " + httpStatus);
                 c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.1");
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
                     StringBuilder sb = new StringBuilder();
@@ -91,6 +94,12 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                 RemoteViews rv = baseViews(context, appWidgetId);
                 rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
                 rv.setImageViewResource(R.id.weather_icon, drawableForCode(p.getInt("last_code_" + appWidgetId, 2)));
+                String kind = error instanceof java.net.UnknownHostException ? "DNS" :
+                    error instanceof java.net.SocketTimeoutException ? "DÉLAI" :
+                    error instanceof javax.net.ssl.SSLException ? "SSL" :
+                    error instanceof org.json.JSONException ? "DONNÉES" :
+                    error.getMessage() != null && error.getMessage().startsWith("HTTP ") ? error.getMessage() : "RÉSEAU";
+                rv.setTextViewText(R.id.weather_locality, "ERREUR " + kind);
                 manager.updateAppWidget(appWidgetId, rv);
             }
         });
