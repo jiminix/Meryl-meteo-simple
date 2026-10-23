@@ -1,6 +1,7 @@
 package com.nik.minimeteo;
 
 import android.app.Activity;
+import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -15,6 +16,10 @@ public class WeatherProxyActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        int widgetId = getIntent().getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, AppWidgetManager.INVALID_APPWIDGET_ID);
+        if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+            WeatherWidgetProvider.updateWidget(this, AppWidgetManager.getInstance(this), widgetId);
+        }
         openSamsungWeather();
         finish();
     }
