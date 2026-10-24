@@ -62,46 +62,58 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
         double lon = Double.longBitsToDouble(p.getLong("lon_" + appWidgetId, 0));
 
         EXECUTOR.execute(() -> {
-            try {
-                String endpoint = String.format(Locale.US,
-                    "https://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f&current=temperature_2m,weather_code&timezone=auto",
-                    lat, lon);
-                HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
-                c.setConnectTimeout(8000);
-                c.setReadTimeout(12000);
-                c.setRequestProperty("Accept", "application/json");
-                int httpStatus = c.getResponseCode();
-                if (httpStatus != 200) throw new java.io.IOException("HTTP " + httpStatus);
-                c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.1");
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
+            Exception failure = null;
+            for (int attempt = 0; attempt < 3; attempt++) {
+                HttpURLConnection c = null;
+                try {
+                    String endpoint = String.format(Locale.US,
+                        "https://api.open-meteo.com/v1/forecast?latitude=%.6f&longitude=%.6f&current=temperature_2m,weather_code&timezone=auto",
+                        lat, lon);
+                    c = (HttpURLConnection) new URL(endpoint).openConnection();
+                    c.setConnectTimeout(12000);
+                    c.setReadTimeout(12000);
+                    c.setRequestProperty("Accept", "application/json");
+                    c.setRequestProperty("User-Agent", "MiniMeteoWidget/1.2");
+                    int httpStatus = c.getResponseCode();
+                    if (httpStatus != 200) throw new java.io.IOException("HTTP " + httpStatus);
                     StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = br.readLine()) != null) sb.append(line);
+                    try (BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream()))) {
+                        String line;
+                        while ((line = br.readLine()) != null) sb.append(line);
+                    }
                     JSONObject current = new JSONObject(sb.toString()).getJSONObject("current");
                     int temp = (int) Math.round(current.getDouble("temperature_2m"));
                     int code = current.getInt("weather_code");
                     p.edit().putInt("last_temp_" + appWidgetId, temp).putInt("last_code_" + appWidgetId, code).apply();
-
                     RemoteViews rv = baseViews(context, appWidgetId);
                     rv.setTextViewText(R.id.weather_temp, temp + "°");
                     rv.setImageViewResource(R.id.weather_icon, drawableForCode(code));
                     manager.updateAppWidget(appWidgetId, rv);
+                    return;
+                } catch (Exception error) {
+                    failure = error;
+                    Log.w("MerylMeteo", "Weather fetch attempt " + (attempt + 1) + " failed", error);
+                    if (error.getMessage() != null && error.getMessage().startsWith("HTTP 4")) break;
+                    if (attempt < 2) {
+                        try { Thread.sleep(1000L * (attempt + 1)); }
+                        catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); break; }
+                    }
                 } finally {
-                    c.disconnect();
+                    if (c != null) c.disconnect();
                 }
-            } catch (Exception error) {
-                Log.w("MerylMeteo", "Weather fetch failed: " + appWidgetId, error);
-                RemoteViews rv = baseViews(context, appWidgetId);
-                rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
-                rv.setImageViewResource(R.id.weather_icon, drawableForCode(p.getInt("last_code_" + appWidgetId, 2)));
-                String kind = error instanceof java.net.UnknownHostException ? "DNS" :
-                    error instanceof java.net.SocketTimeoutException ? "DÉLAI" :
-                    error instanceof javax.net.ssl.SSLException ? "SSL" :
-                    error instanceof org.json.JSONException ? "DONNÉES" :
-                    error.getMessage() != null && error.getMessage().startsWith("HTTP ") ? error.getMessage() : error.getClass().getSimpleName();
-                rv.setTextViewText(R.id.weather_locality, kind);
-                manager.updateAppWidget(appWidgetId, rv);
             }
+            RemoteViews rv = baseViews(context, appWidgetId);
+            rv.setTextViewText(R.id.weather_temp, cachedTemperature(context, appWidgetId));
+            rv.setImageViewResource(R.id.weather_icon, drawableForCode(p.getInt("last_code_" + appWidgetId, 2)));
+            String kind = failure == null ? "INCONNUE" :
+                failure instanceof java.net.UnknownHostException ? "DNS" :
+                failure instanceof java.net.SocketTimeoutException ? "DÉLAI" :
+                failure instanceof javax.net.ssl.SSLException ? "SSL" :
+                failure instanceof org.json.JSONException ? "DONNÉES" :
+                failure.getMessage() != null && failure.getMessage().startsWith("HTTP ") ? failure.getMessage() :
+                failure.getClass().getSimpleName();
+            rv.setTextViewText(R.id.weather_locality, kind);
+            manager.updateAppWidget(appWidgetId, rv);
         });
     }
 
