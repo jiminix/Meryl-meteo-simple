@@ -98,8 +98,8 @@ public class WeatherWidgetProvider extends AppWidgetProvider {
                     error instanceof java.net.SocketTimeoutException ? "DÉLAI" :
                     error instanceof javax.net.ssl.SSLException ? "SSL" :
                     error instanceof org.json.JSONException ? "DONNÉES" :
-                    error.getMessage() != null && error.getMessage().startsWith("HTTP ") ? error.getMessage() : "RÉSEAU";
-                rv.setTextViewText(R.id.weather_locality, "ERREUR " + kind);
+                    error.getMessage() != null && error.getMessage().startsWith("HTTP ") ? error.getMessage() : error.getClass().getSimpleName();
+                rv.setTextViewText(R.id.weather_locality, kind);
                 manager.updateAppWidget(appWidgetId, rv);
             }
         });
